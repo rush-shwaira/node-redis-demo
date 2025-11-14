@@ -7,12 +7,18 @@ const PORT = process.env.PORT || 3000;
 
 let redisClient;
 (async () => {
-  redisClient = redis.createClient({ url: "redis://localhost:6379" });
+  redisClient = redis.createClient({
+    url: process.env.REDIS_URL || "redis://localhost:6379",
+  });
 
   redisClient.on("error", (error) =>
     console.log(`Redis Client Error: ${error}`)
   );
 
+  redisClient.on("ready", () => {
+    console.log("Redis client connected");
+  });
+  
   await redisClient.connect();
 })();
 

@@ -1,0 +1,38 @@
+# 0. Create Dockerfile for Node.js Application
+# 0. Add .dockerignore file
+
+# 1. Define services: app and redis
+services:
+  # a. Define app service
+  app:
+    build: .
+    container_name: node-redis-app
+    env_file:
+      - .env
+    ports:
+      - "${PORT}:3030"
+    networks:
+      - app-network
+    depends_on:
+      - redis
+
+  # b. Define redis service
+  redis:
+    image: "redis:alpine"
+    container_name: redis-server
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+    volumes:
+      - redis-data:/data
+
+# 2. Define volume for redis data persistence
+volumes:
+  redis-data:
+
+# 3. Define network for inter-service communication
+networks:
+  app-network:
+# Start both containers using command
+# docker-compose up --build -d
