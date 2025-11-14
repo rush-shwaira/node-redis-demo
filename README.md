@@ -1,35 +1,34 @@
 # Node.js + Redis Caching (Country API)
 
-This project demonstrates how to implement server-side caching in a Node.js Express app using **Redis**, with Redis running inside a **Docker container**.  
-The API used here is `restcountries.com`, and responses are cached for faster repeated access.
+This project demonstrates how to implement server-side caching in a Node.js Express application using **Redis**, fully containerized with **Docker Compose**.  
+The API used is `restcountries.com`, and responses are cached for faster repeated access.
 
 ---
 
 ## Features
 - Express server with a clean route structure  
-- External API call to retrieve country information  
-- Redis caching layer (TTL 2 minutes)  
+- External API call for country information  
+- Redis caching layer (TTL: 2 minutes)  
 - Middleware-based cache lookup  
-- Docker-based Redis setup — no WSL or Linux installation required  
+- Complete **Docker Compose** setup (Node app + Redis)  
+- No WSL or native Redis installation required  
 
 ---
 
 ## Prerequisites
 - Node.js 16+  
-- Docker installed and running  
+- Docker + Docker Compose  
 - Internet connection for the REST Countries API  
 
 ---
 
-## 1. Install Dependencies
-
-Clone the project and install packages:
+## 1. Clone & Install Dependencies
 
 ```bash
 npm install
 ```
 
-The project uses:
+Dependencies:
 
 * `express`
 * `axios`
@@ -37,104 +36,89 @@ The project uses:
 
 ---
 
-## 2. Run Redis in Docker
+## 2. Environment Variables
 
-Redis is **not installed locally** — instead, a Docker container is used.
-
-### Pull the Redis image:
-
-```bash
-docker pull redis:latest
-```
-
-### Run Redis with a persistent volume:
-
-```bash
-docker run -d \
-  --name redis \
-  -p 6379:6379 \
-  -v redis-data:/data \
-  redis:latest
-```
-
-### Verify Redis is running:
-
-```bash
-docker ps
-```
-
-You should see a container named `redis`.
-
-### Test Redis CLI:
-
-```bash
-docker exec -it redis redis-cli
-PING
-```
-
-If it returns:
+Create a `.env` file:
 
 ```
-PONG
+PORT=3030
+REDIS_URL=redis://redis:6379
 ```
 
-Redis is working.
+These values are injected into the container via `docker-compose.yml`.
 
 ---
 
-## 3. Run the Node Server
+## 3. Docker Setup
 
-Start the Express app:
+This project uses **Docker Compose** to run:
+
+* `node-redis-app` (your Express server)
+* `redis-server` (Redis instance)
+
+### Build & start all services:
 
 ```bash
-node server.js
+docker compose up -d --build
 ```
 
-The server will listen on:
+### Check containers:
 
+```bash
+docker compose ps
 ```
-http://localhost:3000
+
+### View logs (app):
+
+```bash
+docker compose logs -f app
 ```
+
+Expected startup order:
+
+1. Redis container: `Ready to accept connections`
+2. Node app: `App listening on port 3030`
+3. Redis client: `Redis client connected`
 
 ---
 
-## 4. Test the Caching
+## 4. Test the API + Caching
 
-### Hit the API:
-
-```
-http://localhost:3000/country/us
-```
-
-### Expected behavior:
-
-* **First request:**
-
-  * `fromCache: false`
-  * Console shows:
-
-    ```
-    Request sent to external API - us
-    ```
-
-* **Second request (same country):**
-
-  * `fromCache: true`
-  * No external API request — served from Redis
-
-### Try more:
+Hit the API:
 
 ```
-http://localhost:3000/country/in
-http://localhost:3000/country/gb
-http://localhost:3000/country/ca
+http://localhost:3030/country/us
+```
+
+### Behavior:
+
+**First request:**
+
+* `fromCache: false`
+* Console logs:
+
+  ```
+  Request sent to external API - countryCode: us
+  ```
+
+**Second request (same code):**
+
+* `fromCache: true`
+* Returned instantly from Redis
+
+Try more:
+
+```
+http://localhost:3030/country/in
+http://localhost:3030/country/gb
+http://localhost:3030/country/ca
 ```
 
 ---
 
 ## 5. Cache Expiry
 
-Cache entries expire after **120 seconds** (2 minutes):
+Data is cached for 2 minutes:
 
 ```js
 await redisClient.set(key, JSON.stringify(data), {
@@ -143,7 +127,7 @@ await redisClient.set(key, JSON.stringify(data), {
 });
 ```
 
-After expiry, the next request re-fetches from the live API and refreshes the cache.
+After expiry, the next request fetches new data from the API and refreshes the cache.
 
 ---
 
@@ -151,49 +135,58 @@ After expiry, the next request re-fetches from the live API and refreshes the ca
 
 ```
 root
-│── server.js      # Express + Redis caching logic
+│── server.js
 │── package.json
+│── Dockerfile
+│── docker-compose.yml
+│── .env
+│── .dockerignore
+│── .gitignore
 ```
 
 ---
 
-## 7. Stop / Restart Redis
+## 7. Stop / Restart Containers
 
-### Stop:
-
-```bash
-docker stop redis
-```
-
-### Start again:
+Stop:
 
 ```bash
-docker start redis
+docker compose down
 ```
 
-Your cached data **remains**, because a named volume stores Redis data.
+Restart (cached data persists via volume):
+
+```bash
+docker compose up -d
+```
 
 ---
 
-## 8. Remove Redis Completely (optional)
+## 8. Remove Everything (optional)
 
 ```bash
-docker stop redis
-docker rm redis
-docker volume rm redis-data
+docker compose down -v
 ```
+
+Removes:
+
+* containers
+* network
+* named volume (`redis-data`)
 
 ---
 
 ## Summary
 
-This project shows how to:
+With Docker Compose, this project provides a clean and production-friendly setup:
 
-* Run Redis in Docker
-* Integrate Redis caching into an Express application
-* Build a clean API with middleware-based cache lookup
-* Persist Redis data using Docker volumes
+* Node app container
+* Redis container
+* Automatic networking between services
+* Persistent Redis storage
+* Fast caching layer with middleware logic
 
-You now have a fully working Redis caching layer for Node.js without installing Redis natively or using WSL.
+This is a complete working example of Redis caching in a Node.js microservice environment.
 
+```
 ```
