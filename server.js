@@ -7,61 +7,59 @@ const PORT = process.env.PORT || 3000;
 
 let redisClient;
 (async () => {
-  redisClient = redis.createClient();
+  redisClient = redis.createClient({ url: "redis://localhost:6379" });
 
-  redisClient.on("error", (error) => console.log(`Error: ${error}`));
+  redisClient.on("error", (error) =>
+    console.log(`Redis Client Error: ${error}`)
+  );
 
   await redisClient.connect();
 })();
 
-async function fetchApiData(species) {
+async function fetchCountryApiData(countryCode) {
   const apiResponse = await axios.get(
-    `https://www.fishwatch.gov/api/species/${species}`
+    `https://restcountries.com/v3.1/alpha/${countryCode}`
   );
-  console.log("Request sent to API");
+  console.log("Request sent to external API - countryCode:", countryCode);
   return apiResponse.data;
 }
 
 // Cache middleware
-async function cacheData(req, res, next) {
-  const species = req.params.species;
-
-  let results;
-
+async function cacheMiddleware(req, res, next) {
+  const countryCode = req.params.code.toLowerCase();
+  const key = `country:${countryCode}`;
   try {
-    const cacheResults = await redisClient.get(species);
+    const cacheResults = await redisClient.get(key);
     if (cacheResults) {
-      results = JSON.parse(cacheResults);
-      res.send({
+      return res.send({
         fromCache: true,
-        data: results,
+        data: JSON.parse(cacheResults),
       });
-    } else {
-      next();
     }
+    next();
   } catch (error) {
     console.error(error);
-    res.status(404);
+    res.status(500).send("Server error");
   }
 }
 
-async function getSpeciesData(req, res) {
-  const species = req.params.species;
-  let results;
-
+async function getCountryData(req, res) {
   try {
-    results = await fetchApiData(species);
-    if (results.length === 0) {
-      throw "API returned empty array";
+    const countryCode = req.params.code.toLowerCase();
+    const key = `country:${countryCode}`;
+
+    const data = await fetchCountryApiData(countryCode);
+    if (data.length === 0) {
+      throw new Error("No data found");
     }
-    await redisClient.set(species, JSON.stringify(results), {
+    await redisClient.set(key, JSON.stringify(data), {
       EX: 120, // Cache for 2 minutes
       NX: true, // Only set if key does not exist
     });
 
-    res.send({
+    res.json({
       fromCache: false,
-      data: results,
+      data: data,
     });
   } catch (error) {
     console.error(error);
@@ -69,7 +67,7 @@ async function getSpeciesData(req, res) {
   }
 }
 
-app.get("/fish/:species", cacheData, getSpeciesData);
+app.get("/country/:code", cacheMiddleware, getCountryData);
 
 app.listen(PORT, () => {
   console.log(`App listening on port ${PORT}`);
